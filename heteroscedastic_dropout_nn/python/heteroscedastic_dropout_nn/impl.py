@@ -19,6 +19,8 @@ def heteroscedastic_loss_1d(inputs, targets):
     uncertainty. I follow the convention 
        precision = 1 / std.dev (not variance aka std.dev^2)
     """
+    
+    # np.log(np.sqrt(np.pi*2)) == np.log(np.sqrt(np.pi*2))
     pred = inputs[:,0]
     log_precision = inputs[:,1]
     nllh = -log_precision + 0.9189385332046727 - (-torch.pow(torch.exp(log_precision), 2) * torch.pow((torch.flatten(targets) - pred), 2) / 2)
