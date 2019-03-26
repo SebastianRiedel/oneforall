@@ -16,10 +16,10 @@ def heteroscedastic_loss_1d(inputs, targets):
     """
     Assumes first network output is predicted value and second
     is the log_precision of the predicted gaussian observation
-    uncertainty. I follow the convention 
+    uncertainty. I follow the convention
        precision = 1 / std.dev (not variance aka std.dev^2)
     """
-    
+
     # np.log(np.sqrt(np.pi*2)) == 0.9189385332046727
     pred = inputs[:,0]
     log_precision = inputs[:,1]
@@ -40,6 +40,7 @@ class DropoutFFNN(nn.Module):
         for i, (D_in, D_out, activation, dropout_p) in enumerate(zip(D_ins, D_outs, activations, dropout_ps)):
             name = 'linear_{}'.format(i)
             self.add_module(name, nn.Linear(D_in, D_out))
+            nn.init.xavier_uniform_(getattr(self, name).weight)
 
             name = 'activation_{}'.format(i)
             self.add_module(name, str_2_activation[activation]())
@@ -49,6 +50,7 @@ class DropoutFFNN(nn.Module):
 
         name = 'output'
         self.add_module(name, nn.Linear(D_outs[-1], output_dim))
+        nn.init.xavier_uniform_(getattr(self, name).weight)
 
     def forward(self, x):
         for layer in self.children():
