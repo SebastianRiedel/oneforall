@@ -126,7 +126,7 @@ def test_fit_ensemble():
 
     bs=64
     epochs = 300
-    n_ensemble = 10
+    n_ensemble = 5
 
     idx = np.random.permutation(len(xtr))
     tr_idx = idx[::2]
@@ -170,6 +170,54 @@ def test_fit_ensemble():
 
             if epoch % 100 == 0:
                 print(epoch, val_loss)
+
+    def predict(model, X_test_torch, n_samples_test=30, scaler_out=None):
+        model.eval()
+        model.apply(htffnn.activate_dropout)
+
+        with torch.no_grad():
+            preds = []
+            for i in range(n_samples_test):
+                preds.append(model(X_test_torch).to('cpu').numpy())
+        preds = np.stack(preds) # n_samples_test x len(xte) x 2
+        y_preds = preds[:,:,0].squeeze()
+        y_log_precisions = preds[:,:,1].squeeze()
+
+        y_mean = np.mean(y_preds, axis=0)
+        y_stddev = np.mean(1 / np.exp(y_log_precisions), axis=0)
+
+        # invert output scaling
+        if scaler_out is not None:
+            y_mean = scaler_out.inverse_transform(y_mean)
+            y_stddev = y_stddev * scaler_out.scale_
+
+        return y_mean.reshape(-1,1), y_stddev.reshape(-1,1)
+
+    def ensemble_predict(models, X_test_torch, n_samples_test=30, scaler_out=None):
+        y_means = []
+        y_stddevs = []
+
+        for k, model in enumerate(models):
+            mu, std = predict(model, X_test_torch, n_samples_test, scaler_out)
+            y_means.append(mu)
+            y_stddevs.append(std)
+
+        y_means = np.hstack(y_means)
+        y_stddevs = np.hstack(y_stddevs)
+
+        print (y_means.shape)
+        print (y_stddevs.shape)
+
+        # calc ensemble mean
+        y_mean = np.mean(y_means, axis=1)
+
+        # calc ensemble stddev
+        y_stddev = np.sqrt(np.mean(np.square(y_means) + np.square(y_stddevs), axis=1) - np.square(y_mean))
+
+        print (y_mean.shape)
+        print (y_stddev.shape)
+
+        return y_mean, y_stddev
 
     models = []
 
@@ -236,6 +284,15 @@ def test_fit_ensemble():
     ax.fill_between(xte.flatten(), (y_mean - 2*y_stddev).flatten(), (y_mean + 2*y_stddev).flatten(), color='b', label='2 sigma', alpha=0.3)
     ax.legend()
     plt.savefig('./fit_ensemble_sum.png')
+
+    pred_mean, pred_std = ensemble_predict(models, xte_torch, n_samples_test=30, scaler_out=scaler_out)
+    fig, ax = plt.subplots(1,1)
+    ax.scatter(xtr[tr_idx], ytr[tr_idx], color='r', marker='x', label='training data')
+    ax.plot(xte, yte, c='g', label='test data')
+    ax.plot(xte, pred_mean, c='b', label='prediction')
+    ax.fill_between(xte.flatten(), (pred_mean - 2*pred_std).flatten(), (pred_mean + 2*pred_std).flatten(), color='b', label='2 sigma', alpha=0.3)
+    ax.legend()
+    plt.savefig('./fit_ensemble_sum_ensemble_predict.png')
 
 if __name__ == '__main__':
     test_fit_ensemble()
